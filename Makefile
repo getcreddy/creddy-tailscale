@@ -1,0 +1,85 @@
+.PHONY: build test test-integration clean install dev info validate
+
+BINARY_NAME=creddy-tailscale
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS=-ldflags "-X main.PluginVersion=$(VERSION)"
+
+# Build the plugin
+build:
+	go build $(LDFLAGS) -o bin/$(BINARY_NAME) .
+
+# Build for all platforms
+build-all:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-arm64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-amd64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-arm64 .
+
+# Build for Linux (for remote testing)
+build-linux:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-amd64 .
+
+# Push to ttl.sh for dev testing (1 hour TTL)
+release-dev: build-all
+	@echo "Pushing to ttl.sh (1h TTL)..."
+	cd bin && oras push ttl.sh/$(BINARY_NAME):dev \
+		$(BINARY_NAME)-linux-amd64:application/octet-stream \
+		$(BINARY_NAME)-linux-arm64:application/octet-stream \
+		$(BINARY_NAME)-darwin-amd64:application/octet-stream \
+		$(BINARY_NAME)-darwin-arm64:application/octet-stream
+	@echo "Pushed! Install with: creddy plugin install ttl.sh/$(BINARY_NAME):dev"
+
+# Run integration tests (requires TAILSCALE_API_KEY and TAILSCALE_TAILNET)
+test-integration:
+	go test -v -tags=integration ./...
+
+# Run unit tests
+test:
+	go test -v ./...
+
+# Clean build artifacts
+clean:
+	rm -rf bin/
+
+# Install to local Creddy plugins directory
+install: build
+	mkdir -p ~/.local/share/creddy/plugins
+	cp bin/$(BINARY_NAME) ~/.local/share/creddy/plugins/
+
+# --- Development helpers ---
+
+# Show plugin info (standalone mode)
+info: build
+	./bin/$(BINARY_NAME) info
+
+# List scopes (standalone mode)
+scopes: build
+	./bin/$(BINARY_NAME) scopes
+
+# Validate config (standalone mode)
+# Usage: make validate CONFIG=path/to/config.json
+validate: build
+	./bin/$(BINARY_NAME) validate --config $(CONFIG)
+
+# Get a credential (standalone mode)
+# Usage: make get CONFIG=config.json SCOPE="tailscale"
+get: build
+	./bin/$(BINARY_NAME) get --config $(CONFIG) --scope "$(SCOPE)" --ttl 10m
+
+# Development mode: build and install on every change
+dev:
+	@echo "Watching for changes..."
+	@while true; do \
+		$(MAKE) install; \
+		inotifywait -qre modify --include '\.go$$' . 2>/dev/null || fswatch -1 *.go 2>/dev/null || sleep 5; \
+	done
+
+# Create a test config file template
+config-template:
+	@echo '{'
+	@echo '  "api_key": "tskey-api-...",'
+	@echo '  "tailnet": "your-tailnet.com",'
+	@echo '  "default_tags": ["tag:agent"],'
+	@echo '  "ephemeral": true,'
+	@echo '  "preauthorized": true'
+	@echo '}'
