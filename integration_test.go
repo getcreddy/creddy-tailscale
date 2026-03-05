@@ -106,7 +106,7 @@ func TestIntegration_FullLifecycle(t *testing.T) {
 	if !strings.HasPrefix(cred.Value, "tskey-auth-") {
 		t.Errorf("expected auth key to start with 'tskey-auth-', got: %s...", cred.Value[:20])
 	}
-	if cred.ExternalID == "" {
+	if cred.Credential == "" {
 		t.Fatal("expected external ID (key ID)")
 	}
 	if cred.ExpiresAt.IsZero() {
@@ -116,14 +116,14 @@ func TestIntegration_FullLifecycle(t *testing.T) {
 	t.Logf("Created auth key: %s... (expires: %v)", cred.Value[:25], cred.ExpiresAt)
 
 	// Revoke the key
-	err = plugin.RevokeCredential(context.Background(), cred.ExternalID)
+	err = plugin.RevokeCredential(context.Background(), cred.Credential)
 	if err != nil {
 		t.Fatalf("RevokeCredential() error: %v", err)
 	}
 	t.Log("Revoked auth key ✓")
 
 	// Revoking again should be idempotent
-	err = plugin.RevokeCredential(context.Background(), cred.ExternalID)
+	err = plugin.RevokeCredential(context.Background(), cred.Credential)
 	if err != nil {
 		t.Fatalf("Second revoke should be idempotent: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestIntegration_WithTags(t *testing.T) {
 	t.Logf("Created tagged auth key: %s...", cred.Value[:25])
 
 	// Clean up
-	plugin.RevokeCredential(context.Background(), cred.ExternalID)
+	plugin.RevokeCredential(context.Background(), cred.Credential)
 }
 
 func TestIntegration_TTLRespected(t *testing.T) {
@@ -185,7 +185,7 @@ func TestIntegration_TTLRespected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCredential() error: %v", err)
 	}
-	defer plugin.RevokeCredential(context.Background(), cred.ExternalID)
+	defer plugin.RevokeCredential(context.Background(), cred.Credential)
 
 	// Verify expiration is approximately now + TTL
 	expectedExpiry := before.Add(ttl)

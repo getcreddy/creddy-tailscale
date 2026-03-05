@@ -190,7 +190,7 @@ func (p *TailscalePlugin) GetCredential(ctx context.Context, req *sdk.Credential
 
 	return &sdk.Credential{
 		Value:      authKey,
-		ExternalID: keyID,
+		Credential: keyID,
 		ExpiresAt:  expiresAt,
 		Metadata: map[string]string{
 			"tailnet":   p.config.Tailnet,
