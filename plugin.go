@@ -50,7 +50,7 @@ func (p *TailscalePlugin) ConfigSchema(ctx context.Context) ([]sdk.ConfigField, 
 		{
 			Name:        "api_key",
 			Type:        "secret",
-			Description: "Tailscale API key (from admin console)",
+			Description: "Tailscale API key (tskey-api-..., NOT auth key). Generate at: Settings → Keys → Generate API Key",
 			Required:    true,
 		},
 		{
@@ -91,6 +91,15 @@ func (p *TailscalePlugin) Configure(ctx context.Context, configJSON string) erro
 	if config.APIKey == "" {
 		return fmt.Errorf("api_key is required")
 	}
+
+	// Validate key type - must be an API key, not an auth key
+	if strings.HasPrefix(config.APIKey, "tskey-auth-") {
+		return fmt.Errorf("invalid key type: got auth key (tskey-auth-...), need API key (tskey-api-...). Generate an API key in Tailscale admin console → Settings → Keys")
+	}
+	if !strings.HasPrefix(config.APIKey, "tskey-api-") {
+		return fmt.Errorf("invalid API key format: expected key starting with 'tskey-api-'")
+	}
+
 	if config.Tailnet == "" {
 		return fmt.Errorf("tailnet is required")
 	}
